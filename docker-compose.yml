@@ -1,0 +1,80 @@
+version: '3.4'
+
+services:
+
+  traefik:
+    image: traefik:v2.5.1
+    restart: always
+    command:
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --certificatesresolvers.leresolver.acme.email=${ADMIN_EMAIL}
+      # TODO remove for production
+      - --certificatesresolvers.leresolver.acme.caserver=https://acme-staging-v02.api.letsencrypt.org/directory
+      - --certificatesresolvers.leresolver.acme.storage=acme.json
+      - --certificatesresolvers.leresolver.acme.httpchallenge.entrypoint=web
+      - --log=true
+      - --log.level=INFO
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+#    labels:
+#      - "traefik.enable=true"
+#      - "traefik.http.routers.traefik.rule=Host(`traefik.status.${DOMAINNAME}`)"
+#      - "traefik.http.routers.traefik.service=api@internal"
+#      - "traefik.http.routers.traefik.middlewares=admin"
+#      - "traefik.http.routers.traefik.tls.certresolver=leresolver"
+#      - "traefik.http.routers.traefik.entrypoints=websecure"
+#      - "traefik.http.routers.http-catchall.entrypoints=web"
+#      - "traefik.http.routers.http-catchall.rule=HostRegexp(`{host:.+}`)"
+#      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+#      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+
+  postgres:
+    image: postgres
+    restart: always
+    networks:
+      - default
+    environment:
+      POSTGRES_PASSWORD: postgres
+
+  statping:
+    image: adamboutcher/statping-ng:v0.90.77
+    restart: always
+    environment:
+      - DB_CONN=postgres
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASS=postgres
+      - DB_DATABASE=postgres
+      - NAME=Forged Alliance Forever
+      - DESCRIPTION=Status of FAF services
+      - SAMPLE_DATA=false
+      - DOMAIN=https://status.${DOMAINNAME}
+      - ADMIN_USER=admin
+      - ADMIN_PASSWORD=banana
+      - ADMIN_EMAIL
+      - USE_CDN=false
+      - POSTGRES_SSLMODE=disable
+      - DISABLE_LOGS=false
+      - IS_DOCKER=true
+    volumes:
+      - ./data/statping:/app
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.statping.rule=Host(`status.${DOMAINNAME}`)"
+      - "traefik.http.routers.statping.service=statping"
+      - "traefik.http.routers.statping.tls.certresolver=leresolver"
+      - "traefik.http.routers.statping.entrypoints=web,websecure"
+      - "traefik.http.services.statping.loadbalancer.server.port=8080"
+
+
